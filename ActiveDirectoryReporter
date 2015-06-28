@@ -1,0 +1,76 @@
+'*******************************************************************************
+'* File:      ACTIVE DIRECTORY REPORTER
+'*
+'* Purpose:   REPORT USERS HOME DIRECTORY
+'* Version:   1.0.0 (04 February 2010)
+'*
+'* Author:		Jon Normington
+'*******************************************************************************
+
+'If Errors occurs during runtime continue without throwing an exeception
+On Error Resume Next
+
+'Variables holding objects
+Dim objConnection
+Dim objCommand
+Dim objValue
+Dim objRecordSet
+Dim objUser
+
+'Make the connection using ADODB object
+Set objConnection = CreateObject("ADODB.Connection")
+Set objCommand =   CreateObject("ADODB.Command")
+objConnection.Provider = "ADsDSOObject"
+objConnection.Open "Active Directory Provider"
+Set objCommand.ActiveConnection = objConnection
+Err.Clear
+
+'For every page we retrieve 1000 records
+'I checked and found that we have just under 50000 (49584)
+'This reason why I set this to 50
+objCommand.Properties("Page Size") = 50
+objCommand.CommandText = _
+    "SELECT distinguishedName, sAMAccountName, Department, memberOf, homeDirectory, homeDrive, scriptPath " &_
+    "FROM 'LDAP://dc=<ldapHost>,dc=com'" &_
+    "WHERE objectCategory='user'" &_
+    "ORDER BY sAMAccountName"
+
+Set objRecordSet = objCommand.Execute
+'WScript.Echo objRecordSet.RecordCount
+objRecordSet.MoveFirst
+
+Do Until objRecordSet.EOF
+	strUserDomain = objRecordSet.Fields("distinguishedName").Value
+	strUser = objRecordSet.Fields("sAMAccountName").Value
+	strUserDept = objRecordSet.Fields("Department").Value
+	strScriptPath = objRecordSet.Fields("scriptPath").Value
+	strHomeDrive = objRecordSet.Fields("homeDrive").Value
+	strHomeDir = objRecordSet.Fields("homeDirectory").Value
+
+	If InStr(strScriptPath,"ti\") And Not IsNull(strUserDomain) Then
+	'I will assume that anything inside the ti folder is EMEA London controlled
+	'If it doesn't have a scriptPath set this is another story I don't worry about.
+
+		'Fix so it doesn't display lots of Null records when a null value is found I guess some are groups
+		'with a script path set which I think is not valid some how
+		If IsNull(strUser) Then
+			WScript.Echo "NOT SET" + vbTab + strUserDept + vbTab + strScriptPath  + vbTab + strHomeDrive + strHomeDir
+		Else If IsNull(strUserDept) Then
+			WScript.Echo strUser + vbTab + "NOT SET" + vbTab + strScriptPath  + vbTab + strHomeDrive + strHomeDir
+		Else If IsNull(strScriptPath) Then
+			WScript.Echo strUser + vbTab + strUserDept + vbTab + "NOT SET"  + vbTab + strHomeDrive + strHomeDir
+		Else If IsNull(strHomeDrive) Or IsNull(strHomeDir) Then
+			WScript.Echo strUser + vbTab + strUserDept + vbTab + strScriptPath  + vbTab + "NOT SET"
+		Else If Not IsNull(strUser) And Not IsNull(strUserDept) And Not IsNull(strScriptPath) And Not IsNull(strHomeDrive) And Not IsNull(strHomeDir) Then
+			WScript.Echo strUser + vbTab + strUserDept + vbTab + strScriptPath  + vbTab + strHomeDrive + strHomeDir
+		End If
+		End If
+		End If
+		End If
+		End If
+	End If
+	objRecordSet.MoveNext
+Loop
+'Close the connection
+objConnection.Close
+WScript.Quit
